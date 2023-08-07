@@ -1,6 +1,10 @@
 (ns shadow.grove.db
   (:refer-clojure :exclude (ident? remove))
-  (:require [shadow.grove.db.ident :as ident]))
+  (:require [shadow.grove.db.ident :as ident]
+           [clojure.string :as str]
+           [shadow.grove.db.ident-protocol :as idp]))
+
+;; TODO: make :db/ident optional as well?
 
 (defprotocol ITransaction
   (tx-log-new [this key])
@@ -32,21 +36,26 @@
     (conj x y)))
 
 (defn make-ident [type id]
-  #?(:clj (ident/->Ident type id)
-     :cljs (ident/->Ident type id nil)))
+  #_#?(:clj (ident/->Ident type id)
+      :cljs (ident/->Ident type id nil))
+ (idp/-make-ident type id))
 
 (defn ident? [thing]
-  (ident/ident? thing))
+  #_(ident/ident? thing)
+ (idp/-ident? thing))
 
 (defn ident-key [thing]
-  {:pre [(ident/ident? thing)]}
-  #?(:clj (:entity-type thing)
-     :cljs (.-entity-type ^Ident thing)))
+  {:pre [(ident? thing)]}
+ #_#?(:clj (:entity-type thing)
+      :cljs (.-entity-type ^Ident thing))
+ (idp/-ident-key thing))
 
 (defn ident-val [thing]
-  {:pre [(ident/ident? thing)]}
-  #?(:clj (:id thing)
-     :cljs (.-id ^Ident thing)))
+  {:pre [(ident? thing)]}
+ #_#?(:clj (:id thing)
+      :cljs (.-id ^Ident thing))
+
+ (idp/-ident-val thing))
 
 (defn ident-as-vec [ident]
   [(ident-key ident)

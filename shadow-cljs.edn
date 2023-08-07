@@ -27,7 +27,8 @@
   3010 "out/browser-test"
   3011 "examples/app/public"
   3013 "examples/ui"
-  3014 "examples/dummy"}
+  3014 "examples/dummy"
+  3015 "examples/ident-config"}
 
  :build-defaults
  {:compiler-options
@@ -40,6 +41,11 @@
   {:target :browser
    :output-dir "examples/ui/js"
    :modules {:main {:init-fn dummy.ui/init}}}
+
+  :ident-config
+  {:target :browser
+   :output-dir "examples/ident-config/js"
+   :modules {:main {:init-fn dummy.ident-config/init}}}
 
   :dummy
   {:target :browser
