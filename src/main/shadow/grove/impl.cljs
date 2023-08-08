@@ -462,7 +462,7 @@
     (set! read-count (inc read-count))))
 
 (defn hook-query [ident query config]
-  {:pre [(or (nil? ident) (db/ident? ident))
+  {:pre [#_(or (nil? ident) (db/ident? ident))
          (or (nil? query) (vector? query))
          (map? config)]}
   (HookQuery.
