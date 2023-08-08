@@ -68,6 +68,7 @@
           (assoc! result kw calced)))))
 
 ;; FIXME: this tracking of :db/loading is really annoying, should probably just throw instead?
+;; TODO: my mod
 (defn- process-query-part
   [env db current result query-part]
   (cond
@@ -120,24 +121,6 @@
                 ;; {:some-prop [:some-other-ident 123]}
                 ;; FIXME: buggy if val is [:foo :bar] (just a vector of two keywords, no ident)
                 ;; but then the user shouldn't be trying to join so should be fine
-                (db/ident? join-val)
-                (let [val (get db join-val ::missing)]
-                  (cond
-                    (keyword-identical? ::missing val)
-                    (assoc! result join-key ::not-found)
-
-                    (keyword-identical? :db/loading val)
-                    val
-
-                    ;; FIXME: check more possible vals?
-                    :else
-                    (let [query-val (query env db val join-attrs)]
-                      (cond
-                        (keyword-identical? :db/loading query-val)
-                        query-val
-
-                        :else
-                        (assoc! result join-key query-val)))))
 
                 ;; nested-map, may want to join nested
                 (map? join-val)
@@ -153,35 +136,65 @@
                 ;; FIXME: should it preserve sets?
                 (coll? join-val)
                 (assoc! result join-key
-                  (mapv
-                    (fn [join-item]
-                      (cond
-                        (db/ident? join-item)
-                        (let [joined (get db join-item)]
-                          (if (map? joined)
-                            (query env db joined join-attrs)
-                            (throw (ex-info "coll item join missing" {:join-key join-key
-                                                                      :join-val join-val
-                                                                      :join-item join-item}))))
+                        (mapv
+                         (fn [join-item]
+                           (cond
+                             (map? join-item)
+                             (query env db join-item join-attrs)
 
-                        (map? join-item)
-                        (query env db join-item join-attrs)
+                             :else #_(db/ident? join-item)
+                             (let [joined (get db join-item ::missing)]
+                               (cond
+                                 (keyword-identical? ::missing joined)
+                                 ::not-found
+
+                                 (map? joined)
+                                 (query env db joined join-attrs)
+
+                                 :else
+                                 (throw (ex-info "coll item join missing" {:join-key join-key
+                                                                           :join-val join-val
+                                                                           :join-item join-item}))))
+
+                             #_#_:else
+                               (throw (ex-info "join-value contained unknown thing"
+                                               {:join-key join-key
+                                                :join-val join-val
+                                                :join-item join-item
+                                                :current current}))))
+                         join-val))
+
+
+                :else #_(db/ident? join-val)
+                (let [val (get db join-val ::missing)]
+                  (cond
+                    (keyword-identical? ::missing val)
+                    (assoc! result join-key ::not-found)
+
+                    (keyword-identical? :db/loading val)
+                    val
+
+                                                                                                                                                                                                    ;; FIXME: check more possible vals?
+                    :else
+                    (let [query-val (query env db val join-attrs)]
+                      (cond
+                        (keyword-identical? :db/loading query-val)
+                        query-val
 
                         :else
-                        (throw (ex-info "join-value contained unknown thing"
-                                 {:join-key join-key
-                                  :join-val join-val
-                                  :join-item join-item
-                                  :current current}))))
-                    join-val))
+                        (assoc! result join-key query-val)))))
 
-                :else
-                (throw (ex-info "don't know how to join" {:query-part query-part :join-val join-val :join-key join-key}))))
+                #_:else
+                #_(throw (ex-info "don't know how to join" {:query-part query-part :join-val join-val :join-key join-key}))))
 
             ;; from root
-            (db/ident? join-key)
-            (let [join-val (get db join-key)]
+            #_(db/ident? join-key)
+            :else
+            (let [join-val (get db join-key ::missing)]
               (cond
+                (keyword-identical? ::missing join-val)
+                result
+
                 (keyword-identical? :db/loading join-val)
                 join-val
 
@@ -193,13 +206,14 @@
                   (cond
                     (keyword-identical? :db/loading query-val)
                     query-val
+
                     :else
                     (assoc! result join-key query-val)))))
 
-            :else
-            (throw (ex-info "failed to join" {:query-part query-part
-                                              :current current
-                                              :result result})))))
+            #_:else
+            #_(throw (ex-info "failed to join" {:query-part query-part
+                                                :current current
+                                                :result result})))))
 
 
     :else
