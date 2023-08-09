@@ -161,7 +161,6 @@
     nil))
 
 ;; TODO: Custom Formatter Failed: Uncaught RangeError: Maximum call stack size exceeded
-;; possibly related to Lexical EditorState ?!
 #_(when-let [^js f js/goog.global.devtoolsFormatters]
   (doto f
     (.push (IdentFormatter.))

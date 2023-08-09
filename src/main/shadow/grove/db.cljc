@@ -1,10 +1,41 @@
 (ns shadow.grove.db
   (:refer-clojure :exclude (ident? remove))
   (:require [shadow.grove.db.ident :as ident]
-           [clojure.string :as str]
-           [shadow.grove.db.ident-protocol :as idp]))
+            [clojure.string :as str]
+            [shadow.grove.db.ident-protocol :as idp]))
 
 ;; TODO: make :db/ident optional as well?
+;; it might be beneficial to have non xt/id identifiers in ui?
+;; probably not worth it, since without it you can just add any entity and it should work fine
+
+;; TODO: I kind of want to remove all schema from grove? I don't use it at all.
+;; normalization can only work with a schema, though.
+;; unless you do something like (= "id" (name key)) = primary key, which would not be useful for me (e.g. what pyramid and doxa do)
+;; IDEA: at each step of normalization, whether something is an entity and it's type can be determined from the value bieng normalized
+;; however, this won't work for already denormalized data :foo {:xt/id ...} vs :foo id ACTUALLY NO:
+;; yes it would because there are no idents so :foo id is perfectly fine
+
+;; TODO: I don't want add et al to have to take entity-type? it should just assoc + insert ident where apt
+
+;; TODO: in GroveDB, instead of ident? checks, you can check if the value being assocd has :xt/id
+;; so have a protocol fn like is-entity? which takes the key and the val being assocd/dissocd
+
+;; TODO: I don't think hooking up backrefs to assoc/dissoc in GroveDB would work
+;; example: tx has two assocs, after first you add backrefs to A, then the second assoc overwrites A
+;; I guess you could always copy the backrefs before associng, but ew
+;; it could work if backrefs are stored in separate index, but... I don't like that idea
+;; ! another issue is: which keys qualify for backrefs?
+;; only if I had idents, then I could check the values
+;; otherwise, some kind of schema, but that has problems (I don't want it, mismatch with xt schemaless and my own data model with user-added prop keys)
+;; also, some ops like h/copy-and-add can actually handle backrefs more efficiently
+;; but that is also very complex code and you have to keep thinking about it
+;; ! probably best to realize this idea in 'post-tx-rules' see below
+
+
+;; TODO: 'post-tx rules' idea https://github.com/thheller/shadow-grove/issues/7
+;; want to use it for:
+;; - automatic adding management of p-created/modified-at/by
+;; - backrefs
 
 (defprotocol ITransaction
   (tx-log-new [this key])
@@ -137,7 +168,12 @@
     :else
     val))
 
-
+;; TODO: move coll-key to the IdentProtocol as well
+;; it should take both ident and corresponding entity as args
+;; this would allow users to determine the coll-key without an ident
+;; or when their ident=id doesn't encode type
+;; returning nil or a special key from the fn will signal that no coll-key could be derived
+;; and so won't be used further
 (defn coll-key [thing]
   {:pre [(ident? thing)]}
   [::all (ident-key thing)])
@@ -602,7 +638,7 @@
   "Returns a [[GroveDB]] instance with associated `spec` as its schema used for
    normalization operations. You may optionally initialize the db to an `init-db`
    map. This will not normalize data from `init-db` in any way.
-   
+
    ---
    Example:
    ```
@@ -612,7 +648,7 @@
        :primary-key :id
        :attrs {}
        :joins {:folder/contains [:many ::file]}}})
-   
+
    (defonce data-ref
      (-> (db/configure schema)
          (atom)))
@@ -717,7 +753,7 @@
     data
     imports))
 
-(defn merge-seq 
+(defn merge-seq
   "Normalizes `coll` of items of `entity-type` into `data` (a [[configure]]d
    [[GroveDB]] instance). The vector of idents normalized can be inserted at
    target-path, replacing what's present. Alternatively, you can specify a target-fn
@@ -757,7 +793,7 @@
   "Normalizes the `item` of `entity-type` into `data` at `target-path`.
 
    * `data` - this should be a [[configure]]d [[GroveDB]] instance.
-   * `entity-type` of `item` being added. Should be present in db schema. 
+   * `entity-type` of `item` being added. Should be present in db schema.
    * `item` - a *map* of data to add. (For collections, see [[merge-seq]].)
    * `target-path` - where to `conj` the ident of `item`.
 
@@ -777,7 +813,7 @@
 
    (-> (db/configure schema)
        (db/add ::node {:id 0 :children [{:id 1} {:id 2}]} [::root]))
-   ```"  
+   ```"
   ([data entity-type item]
    (add data entity-type item nil))
   ([data entity-type item target-path]
@@ -828,7 +864,7 @@
 ;; don't want to write code that assumes it uses core remove
 (defn remove
   "Removes `thing` from `data` root. `thing` can be either an ident or a map
-   like `{:db/ident ident ...}`. When used on a [[GroveDB]] instance, `thing` will 
+   like `{:db/ident ident ...}`. When used on a [[GroveDB]] instance, `thing` will
    be removed from the set of all entities of `thing`'s type. Will *not* remove
    any other references to `thing`."
   [data thing]
@@ -843,7 +879,7 @@
     (throw (ex-info "don't know how to remove thing" {:thing thing}))))
 
 (defn remove-idents
-  "Given a coll of `idents`, [[remove]]s all corresponding entities from `data`."  
+  "Given a coll of `idents`, [[remove]]s all corresponding entities from `data`."
   [data idents]
   (reduce remove data idents))
 
