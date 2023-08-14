@@ -34,8 +34,9 @@
 
 ;; TODO: 'post-tx rules' idea https://github.com/thheller/shadow-grove/issues/7
 ;; want to use it for:
-;; - automatic adding management of p-created/modified-at/by
+;; - automatic management of p-created/modified-at/by
 ;; - backrefs
+;; - syncing mirrors
 
 (defprotocol ITransaction
   (tx-log-new [this key])
