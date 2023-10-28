@@ -53,11 +53,11 @@
 
    Called when building query results for each EQL attribute. See [[::default]].
    Idents accessed within the method will be 'observed': the query will re-run
-   if said idents are modified.   
-   
-   ---   
+   if said idents are modified.
+
+   ---
    Example:
-   
+
    ```clojure
    ;; in a component
    (bind query-result
@@ -72,7 +72,7 @@
    ;; {:test 1} available in `params` for
    (defmethod attr ::bar
      [_ _ _ _ params])
-   
+
    ;; another example
    (defmethod eql/attr ::m/num-active
      [env db current _ params]
@@ -286,3 +286,30 @@
   (query {}
     {:hello {:world 1 :foo true}}
     [{:hello [:world]}]))
+
+(comment
+  (def test-db
+    {:hello {:world 1
+             :join :foo
+             :join-v [:foo :bar :not-there]
+             :join-not-there :not-there}
+     :foo {:data "foo"}
+     :bar {:data "bar"}})
+
+  (= (query {} test-db [{:hello [:world
+                                 {:join [:db/all]}
+                                 {:join-v [:db/all]}
+                                 {:join-not-there [:db/all]}]}])
+     {:hello {:world 1
+              :join {:data "foo"}
+              :join-v [{:data "foo"} {:data "bar"} ::not-found]
+              :join-not-there ::not-found}})
+
+  (= (query {} test-db [{:not-there [:db/all]}])
+     {})
+
+  (= (query {} test-db [:hello])
+     {:hello {:join :foo
+              :join-not-there :not-there
+              :join-v [:foo :bar :not-there]
+              :world 1}}))
