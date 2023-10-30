@@ -94,7 +94,7 @@
   "Use inside a component event handler. Runs transaction `tx`, e.g.
    `{:e ::some-event :data ...}`. `env` is the component environment map
    available in event handlers.
-   
+
    ---
    Example
    ```clojure
@@ -121,16 +121,16 @@
 
 (defn watch
   "Hook that watches `the-atom` and updates when the atom's value changes.
-   
+
    Accepts an optional `path-or-fn` arg that can be used to 'watch' a portion of
    `the-atom`, enabling quick diffs.
    * 'path' – as in `(get-in @the-atom path)`
    * 'fn'   - similar to above, defines how to access the relevant parts of
    `the-atom`. Takes [old-state new-state] of `the-atom` and returns the actual
    value stored in the hook. Example: `(fn [_ new] (get-in new [:id :name]))`.
-   
+
    **Use strongly discouraged** in favor of the normalized central db.
-   
+
    ---
    Examples
    ```clojure
@@ -161,9 +161,9 @@
   (suspense/SuspenseInit. opts vnode))
 
 (defn simple-seq
-  "Creates a collection of DOM elements by applying `render-fn` to each item 
+  "Creates a collection of DOM elements by applying `render-fn` to each item
    in `coll`. `render-fn` can be a function or component.
-   
+
    Makes no attempts to minimize DOM operations required for updates. Efficient
    with colls which change infrequently or colls updated at the tail. Otherwise,
    consider using [[keyed-seq]].
@@ -188,7 +188,7 @@
 
    Uses the key to minimize DOM updates. Consider using instead of (the more
    lightweight) [[simple-seq]] when `coll` changes frequently.
-   
+
    ---
    Examples:
 
@@ -442,10 +442,10 @@
    * `init`       – Optional. A map.
    * `data-ref`   – Ref to the grove db atom.
    * `runtime-id`
-  
+
   ---
   Example:
-   
+
   ```clojure
   (defonce rt-ref
     (-> {::rt/tx-reporter (fn [report] (tap> report))}
@@ -516,20 +516,20 @@
    `tx-env`.
 
    There is an alternative approach to registering event handlers, see examples.
-   
+
    ---
    Example:
    ```clojure
    (sg/reg-event rt-ref ::complete!
      (fn [tx-env {:keys [checked ident] :as ev}]
        (assoc-in tx-env [:db ident :completed?] checked)))
-   
+
    ;; metadata approach
    (defn complete! {::ev/handle ::complete!}
      [tx-env {:keys [checked ident] :as ev}]
      (assoc-in tx-env [:db ident :completed?] checked))
-   
-   ;; use `{:dev/always true}` in namespaces utilising the metadata approach. 
+
+   ;; use `{:dev/always true}` in namespaces utilising the metadata approach.
    ```"
   [rt-ref ev-id handler-fn]
   {:pre [(keyword? ev-id)
@@ -540,7 +540,7 @@
 (defn reg-fx
   "Registers the `handler-fn` for fx `fx-id`. fx is used for side effects, so
    `handler-fn` shouldn't modify the db.
-   
+
    ---
    Examples:
 
@@ -555,7 +555,7 @@
       (fn [fx-env {:keys [show?] :as fx-data}]
         (js/alert (str \"Will \" (when-not show? \"not\") \" show hidden files.\"))))
    ```
-   
+
    `(:transact! fx-env)` allows fx to schedule another transaction, but it
    should be an async call:
    ```clojure
