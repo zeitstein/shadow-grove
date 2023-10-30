@@ -1,6 +1,6 @@
-(ns shadow.grove.eql-query
-  "minimal EQL query engine"
-  (:require [shadow.grove.db :as db]))
+(ns shadow.grove.eql-query-brimm
+  "forked from shadow.grove.eql-query
+   modifications purely to remove reliance on db/ident?")
 
 ;; ideally would like to use pathom but currently that carries too much overhead
 ;; and is over 10x slower for small simple queries. assuming that a page
@@ -51,6 +51,48 @@
 ;; but is the easiest to use with hot-reload in mind
 
 (defmulti attr
+  "Define 'computed attributes'. The attribute is the dispatch-fn of the method.
+   The return of this function will be included in query results for that
+   attribute. *Must not return lazy seq.*
+
+   The methods are called with the following args:
+   1. `env` - component env.
+   2. `db` - the db map.
+   3. `current` - the entity which is the root of the query. For `query-ident`
+      this is the entity corresponding to the ident, for `query-root` it is the
+      whole db map.
+   4. `query-part` – the dispatch-fn of the method, i.e. an EQL attribute.
+   5. `params` - optional parameters specified with EQL attributes.
+
+   Called when building query results for each EQL attribute. See [[::default]].
+   Idents accessed within the method will be 'observed': the query will re-run
+   if said idents are modified.
+
+   ---
+   Example:
+
+   ```clojure
+   ;; in a component
+   (bind query-result
+     (sg/query-ident ident [::foo '(::bar {:test 1})]))
+
+   ;; elsewhere
+   (defmethod attr ::foo
+     [env db current query-part params]
+     ;; the ::default impl
+     (get current query-part :db/undefined))
+
+   ;; {:test 1} available in `params` for
+   (defmethod attr ::bar
+     [_ _ _ _ params])
+
+   ;; another example
+   (defmethod eql/attr ::m/num-active
+     [env db current _ params]
+     (->> (db/all-of db ::m/todo)
+         (remove ::m/completed?)
+         (count)))
+   ```"
   (fn [env db current query-part params] query-part)
   :default ::default)
 
@@ -87,8 +129,8 @@
                     :result calced}))))
           (assoc! result kw calced)))))
 
-(defn- db-ident-lookup [env db ident]
-  (get db ident ::missing))
+(defn- db-lookup [env db key]
+  (get db key ::missing))
 
 ;; process join of keyword
 ;;
@@ -116,31 +158,6 @@
       (nil? join-val)
       result
 
-      ;; {:some-prop #gdb/ident [:some-other-ident 123]}
-      (db/ident? join-val)
-      (let [val (db-ident-lookup env db join-val)]
-        (cond
-          (keyword-identical? ::missing val)
-          (assoc! result join-key {:db/ident join-val
-                                   :db/not-found true})
-
-          (keyword-identical? :db/loading val)
-          val
-
-          ;; continue query using ident value as new current
-          (map? val)
-          (let [query-val (query env db val join-attrs)]
-            (cond
-              (keyword-identical? :db/loading query-val)
-              query-val
-
-              :else
-              (assoc! result join-key query-val)))
-
-          :else
-          (throw-invalid-ident-lookup! env join-val val)
-          ))
-
       ;; nested-map, run new query from that root
       (map? join-val)
       (let [query-val (query env db join-val join-attrs)]
@@ -157,11 +174,14 @@
             (reduce
               (fn [acc join-item]
                 (cond
-                  (db/ident? join-item)
-                  (let [val (db-ident-lookup env db join-item)]
+                  (map? join-item)
+                  (query env db join-item join-attrs)
+
+                  :else #_(db/ident? join-item)
+                  (let [val (db-lookup env db join-item)]
                     (cond
                       (keyword-identical? ::missing val)
-                      (conj! acc {:db/ident join-item
+                      (conj! acc {:join-key join-item
                                   :db/not-found true})
 
                       (keyword-identical? :db/loading val)
@@ -178,13 +198,15 @@
                           (conj! acc query-val)))
 
                       :else
-                      (throw-invalid-ident-lookup! env join-item val)))
+                      #_(throw-invalid-ident-lookup! env join-item val)
+                      (throw-traced env
+                        "join-value contained unknown thing we cannot continue query from"
+                        {:join-key join-item
+                         :join-val val})
+                      ))
 
-                  (map? join-item)
-                  (query env db join-item join-attrs)
-
-                  :else
-                  (throw-traced env
+                  #_:else
+                  #_(throw-traced env
                     "join-value contained unknown thing we cannot continue query from"
                     {:join-key join-key
                      :join-val join-val
@@ -198,8 +220,36 @@
           joined-coll
           (assoc! result join-key (persistent! joined-coll))))
 
-      :else
-      (throw-traced env
+      ;; {:some-prop #gdb/ident [:some-other-ident 123]}
+      :else #_(db/ident? join-val)
+      (let [val (db-lookup env db join-val)]
+        (cond
+          (keyword-identical? ::missing val)
+          (assoc! result join-key {:join-key join-val
+                                   :db/not-found true})
+
+          (keyword-identical? :db/loading val)
+          val
+
+          ;; continue query using ident value as new current
+          (map? val)
+          (let [query-val (query env db val join-attrs)]
+            (cond
+              (keyword-identical? :db/loading query-val)
+              query-val
+
+              :else
+              (assoc! result join-key query-val)))
+
+          :else
+          #_(throw-invalid-ident-lookup! env join-val val)
+          (throw-traced env
+            "don't know how to join"
+            {:join-val val
+             :join-key join-val})))
+
+      #_:else
+      #_(throw-traced env
         "don't know how to join"
         {:join-val join-val
          :join-key join-key}))))
@@ -242,18 +292,22 @@
             (keyword? join-key)
             (process-query-kw-join env db current result join-key {} join-attrs)
 
+            (seq? join-key)
+            (let [[join-kw join-params] join-key]
+              (process-query-kw-join env db current result join-kw join-params join-attrs))
+
             ;; can join idents from anywhere, most likely from root though
-            (db/ident? join-key)
-            (let [join-val (db-ident-lookup env db join-key)]
+            :else #_(db/ident? join-key)
+            (let [join-val (db-lookup env db join-key)]
               (cond
                 (keyword-identical? :db/loading join-val)
                 join-val
 
-                ;; FIXME: maybe just have db-ident-lookup return the not found map?
+                ;; FIXME: maybe just have db-kw-lookup return the not found map?
                 ;; but then the query will continue and the values we put there since
                 ;; the query likely won't contain the fields
                 (keyword-identical? ::missing join-val)
-                (assoc! result join-key {:db/ident join-key :db/not-found true})
+                (assoc! result join-key {:join-key join-key :db/not-found true})
 
                 ;; do we want the query result to be {:foo nil} or just {}
                 ;; when {ident nil} is in the db?
@@ -273,12 +327,9 @@
                   {:ident join-key
                    :value join-val})))
 
-            (seq? join-key)
-            (let [[join-kw join-params] join-key]
-              (process-query-kw-join env db current result join-kw join-params join-attrs))
 
-            :else
-            (throw-traced env
+            #_:else
+            #_(throw-traced env
               "failed to join"
               {:query-part query-part
                :current current
@@ -307,7 +358,7 @@
                ;; using a record here so that allocation is cheaper
                ;; this code is potentially called a lot, I want this to be efficient
                ;; can't waste time when in a UI rendering context
-               trace (->Trace (:db/ident current) query-part i query-data (::trace env))
+               trace (->Trace current #_(:db/ident current) query-part i query-data (::trace env))
                env (assoc env ::trace trace)
                result (process-query-part env db current result query-part)]
 
@@ -321,7 +372,30 @@
              (recur current result (inc i)))))))))
 
 
+
 (comment
-  (query {}
-    {:hello {:world 1 :foo true}}
-    [{:hello [:world]}]))
+  (def test-db
+    {:hello {:world 1
+             :join :foo
+             :join-v [:foo :bar :not-there]
+             :join-not-there :not-there}
+     :foo {:data "foo"}
+     :bar {:data "bar"}})
+
+  (= (query {} test-db [{:hello [:world
+                                 {:join [:db/all]}
+                                 {:join-v [:db/all]}
+                                 {:join-not-there [:db/all]}]}])
+     {:hello {:world 1
+              :join {:data "foo"}
+              :join-v [{:data "foo"} {:data "bar"} {:db/not-found true, :join-key :not-there}]
+              :join-not-there {:db/not-found true, :join-key :not-there}}})
+
+  (= (query {} test-db [{:not-there [:db/all]}])
+     {})
+
+  (= (query {} test-db [:hello])
+     {:hello {:join :foo
+              :join-not-there :not-there
+              :join-v [:foo :bar :not-there]
+              :world 1}}))

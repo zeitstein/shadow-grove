@@ -4,8 +4,8 @@
     [shadow.grove :as-alias sg]
     [shadow.grove.protocols :as gp]
     [shadow.grove.runtime :as rt]
-    [shadow.grove.db :as db]
-    [shadow.grove.eql-query :as eql]
+    [shadow.grove.db-brimm :as db]
+    [shadow.grove.eql-query-brimm :as eql]
     [shadow.grove.components :as comp]
     ))
 
@@ -272,8 +272,24 @@
               (fn [next-tx]
                 (throw (ex-info "transact! only allowed from fx env" {:tx next-tx}))))
 
+            inter-result
+            (merge-result tx-env ev (handler tx-env ev))
+
             result
-            (merge-result tx-env ev (handler tx-env ev))]
+            (if-some [inter-tx-fn (::rt/inter-tx-fn env)]
+              ;; ! doesn't work with transient keys-new et al
+              (let [inter-db (:db inter-result)
+                    inter-tx (.-tx inter-db)
+                    final-db (inter-tx-fn {:event ev
+                                           #_#_:origin origin
+                                           :keys-new (.-keys-new inter-tx)
+                                           :keys-removed (.-keys-removed inter-tx)
+                                           :keys-updated (.-keys-updated inter-tx)
+                                           :db-before @before
+                                           :db inter-db})]
+                (assoc inter-result :db final-db))
+
+              inter-result)]
 
         (let [{:keys [db data keys-new keys-removed keys-updated] :as tx-result}
               (db/tx-commit! (:db result))]
