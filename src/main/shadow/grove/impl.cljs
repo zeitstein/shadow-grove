@@ -277,16 +277,10 @@
 
             result
             (if-some [inter-tx-fn (::rt/inter-tx-fn env)]
-              ;; ! doesn't work with transient keys-new et al
-              (let [inter-db (:db inter-result)
-                    inter-tx (.-tx inter-db)
-                    final-db (inter-tx-fn {:event ev
-                                           #_#_:origin origin
-                                           :keys-new (.-keys-new inter-tx)
-                                           :keys-removed (.-keys-removed inter-tx)
-                                           :keys-updated (.-keys-updated inter-tx)
-                                           :db-before @before
-                                           :db inter-db})]
+              (let [inter-db  (:db inter-result)
+                    inter-env (merge (db/validate-tx-keys @before inter-db)
+                                     {:event ev :db-before @before :db inter-db})
+                    final-db  (:db (inter-tx-fn inter-env))]
                 (assoc inter-result :db final-db))
 
               inter-result)]

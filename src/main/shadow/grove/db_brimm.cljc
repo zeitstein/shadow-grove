@@ -441,6 +441,45 @@
     (if (instance? GroveDB db) @db db)))
 
 
+;; doesn't work with transient keys
+(defn recorded-tx-keys [^GroveDB db]
+  (when-some [tx (.-tx db)]
+    {:keys-new     (.-keys-new tx)
+     :keys-removed (.-keys-removed tx)
+     :keys-updated (.-keys-updated tx)}))
+
+
+(defn key-removed? [db-before db-after k]
+  (and (contains? db-before k) (not (contains? db-after k))))
+
+(defn key-added? [db-before db-after k]
+  (and (not (contains? db-before k)) (contains? db-after k)))
+
+(defn key-updated? [db-before db-after k]
+  (and (contains? db-before k) (contains? db-after k)))
+
+(defn filters [pred set]
+  (reduce (fn [acc itm] (if (pred itm) acc (disj acc itm)))
+          set set))
+
+(comment
+  (filters pos? #{-1 0 1 2}))
+
+;; TODO: could be a protocol implemented by GDB?
+(defn validate-tx-keys
+  "- key is truly removed if it was present in db-before but is absent in db-after
+   - key is truly new if absent in db-before but present in db-after
+   - keys is updated if present in both places"
+  ([db-before db]
+   (let [{:keys [keys-new keys-updated keys-removed]} (recorded-tx-keys db)]
+     (validate-tx-keys db-before db keys-new keys-updated keys-removed)))
+  ([db-before db-after keys-new keys-updated keys-removed]
+   (let [filters* (fn [f ks] (filters #(f db-before db-after %) ks))]
+     {:keys-new     (filters* key-added? keys-new)
+      :keys-updated (filters* key-updated? keys-updated)
+      :keys-removed (filters* key-removed? keys-removed)})))
+
+
 ;; TODO: perhaps use a key like ::invalid-type, instead of nil
 (defn default-type-fn [_]
   nil)
