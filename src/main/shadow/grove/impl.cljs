@@ -260,6 +260,12 @@
             tx-done-ref
             (atom false)
 
+            timestamp
+            (js/Date.now)
+
+            ev
+            (assoc ev :tx-timestamp timestamp) ;; for created/modified-at
+
             tx-env
             (assoc env
               ::tx-guard tx-guard
@@ -272,18 +278,21 @@
               (fn [next-tx]
                 (throw (ex-info "transact! only allowed from fx env" {:tx next-tx}))))
 
-            inter-result
+            result-before-tx-rules
             (merge-result tx-env ev (handler tx-env ev))
 
             result
             (if-some [inter-tx-fn (::rt/inter-tx-fn env)]
-              (let [inter-db  (:db inter-result)
-                    inter-env (merge (db/validate-tx-keys @before inter-db)
-                                     {:event ev :db-before @before :db inter-db})
-                    final-db  (:db (inter-tx-fn inter-env))]
-                (assoc inter-result :db final-db))
+              (let [inter-db  (:db result-before-tx-rules)
+                    inter-env (merge {:event ev :db-before @before :db inter-db}
+                                     (db/normalise-tx-keys @before inter-db))
 
-              inter-result)]
+                    inter-result (-> (inter-tx-fn inter-env)
+                                     ;; make these available in tx reporter
+                                     (select-keys [:db :server-update :server-create :server-remove :tx-doc-datoms]))]
+                (merge result-before-tx-rules inter-result))
+
+              result-before-tx-rules)]
 
         (let [{:keys [db data keys-new keys-removed keys-updated] :as tx-result}
               (db/tx-commit! (:db result))]

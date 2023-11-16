@@ -466,13 +466,13 @@
   (filters pos? #{-1 0 1 2}))
 
 ;; TODO: could be a protocol implemented by GDB?
-(defn validate-tx-keys
+(defn normalise-tx-keys
   "- key is truly removed if it was present in db-before but is absent in db-after
    - key is truly new if absent in db-before but present in db-after
    - keys is updated if present in both places"
   ([db-before db]
    (let [{:keys [keys-new keys-updated keys-removed]} (recorded-tx-keys db)]
-     (validate-tx-keys db-before db keys-new keys-updated keys-removed)))
+     (normalise-tx-keys db-before db keys-new keys-updated keys-removed)))
   ([db-before db-after keys-new keys-updated keys-removed]
    (let [filters* (fn [f ks] (filters #(f db-before db-after %) ks))]
      {:keys-new     (filters* key-added? keys-new)
