@@ -78,26 +78,22 @@
        (throw (ex-info "read-only" {})))
 
      (containsKey [this key]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (.containsKey data key))
 
      (valAt [this key]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (.valAt data key))
 
      (valAt [this key not-found]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (.valAt data key not-found))
 
      (entryAt [this key]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (.entryAt data key)))
 
@@ -124,14 +120,12 @@
 
      ILookup
      (-lookup [_ key]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (-lookup data key))
 
      (-lookup [_ key default]
-       (when (nil? key)
-         (throw (ex-info "cannot read nil key" {})))
+       #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
        (set! keys-used (conj! keys-used key))
        (-lookup data key default))))
 
@@ -195,31 +189,26 @@
          (.count data))
 
        (containsKey [this key]
-         (when (nil? key)
-           (throw (ex-info "cannot read nil key" {})))
+         #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
          (.containsKey data key))
 
        (valAt [this key]
-         (when (nil? key)
-           (throw (ex-info "cannot read nil key" {})))
+         #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
          (.valAt data key))
 
        (valAt [this key not-found]
-         (when (nil? key)
-           (throw (ex-info "cannot read nil key" {})))
+         #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
          (.valAt data key not-found))
 
        (entryAt [this key]
-         (when (nil? key)
-           (throw (ex-info "cannot read nil key" {})))
+         #_(when (nil? key) (throw (ex-info "cannot read nil key" {})))
          (.entryAt data key))
 
        (assoc [this key value]
          (when tx
            (tx-check-completed! tx))
 
-         (when (nil? key)
-           (throw (ex-info "nil key not allowed" {:value value})))
+         (when (nil? key) (throw (ex-info "cannot assoc nil key" {:value value})))
 
          ;; FIXME: should it really check each write if anything changed?
          (let [prev-val    (.valAt data key ::not-found)
@@ -349,8 +338,7 @@
          (when tx
            (tx-check-completed! tx))
 
-         (when (nil? key)
-           (throw (ex-info "nil key not allowed" {:value value})))
+         (when (nil? key) (throw (ex-info "cannot assoc nil key" {:value value})))
 
          ;; FIXME: should it really check each write if anything changed?
 
