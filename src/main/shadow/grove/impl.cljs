@@ -264,7 +264,9 @@
             (js/Date.now)
 
             ev
-            (assoc ev :tx-timestamp timestamp) ;; for created/modified-at
+            (if (map? ev)
+              (assoc ev :tx-timestamp timestamp)
+              {:e ev-id :tx-timestamp timestamp}) ;; for created/modified-at
 
             tx-env
             (assoc env
