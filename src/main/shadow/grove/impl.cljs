@@ -286,13 +286,8 @@
             result
             (if-some [inter-tx-fn (::rt/inter-tx-fn env)]
               (let [inter-db  (:db result-before-tx-rules)
-                    inter-env (merge {:event ev :db-before @before :db inter-db}
-                                     (db/normalise-tx-keys @before inter-db))
-
-                    inter-result (-> (inter-tx-fn inter-env)
-                                     ;; make these available in tx reporter
-                                     (select-keys [:db :server-update :server-create :server-remove :tx-doc-datoms]))]
-                (merge result-before-tx-rules inter-result))
+                    inter-env {:event ev :db-before @before :db inter-db}]
+                (merge result-before-tx-rules (inter-tx-fn inter-env)))
 
               result-before-tx-rules)]
 

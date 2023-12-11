@@ -1,7 +1,7 @@
 (ns shadow.grove.db-brimm
   "Fork of shadow.grove.db, removing idents and leaning more into a schema-less
    approach. ::all collections can still be used, though."
-  (:refer-clojure :exclude (ident? remove)))
+  (:refer-clojure :exclude [ident?]))
 
 
 (defprotocol ITransaction
@@ -129,6 +129,39 @@
        (set! keys-used (conj! keys-used key))
        (-lookup data key default))))
 
+
+;; Since :keys-* record access to db, it might happen e.g. that in the same tx a
+;; key was created then updated. This is fine for the purpose of refreshing the UI,
+;; but might not be fine for code that wants the actual semantics of new/updated/removed.
+;;
+;; - key is truly removed if it was present in db-before but is absent in db-after
+;; - key is truly new if absent in db-before but present in db-after
+;; - keys is only updated if present in both places
+;;
+;; ✔︎ maybe I should solve this at the level of GDB tx-log-*
+;; not having to do normalise-tx-keys everywhere - could be a perf issue for big updates
+;; the ui doesn't care, as long as the union is correct
+;;
+;; tx-log-new:
+;; - if in keys-updated, shouldn't be able to happen
+;; - if in keys-removed, remove it from keys-removed
+;; tx-log-modified:
+;; - if already in keys-new, don't add to keys-updated
+;; - if in keys-removed, shouldn't be able to happen
+;; tx-log-removed
+;; - if in keys-new, remove it from keys-new
+;; - if in keys-updated, remove it from keys-updated
+;;
+;; ❌ tx-log-* has access to data-before, so maybe could check there
+;; tx-log-new: add only if not in data-before
+;; tx-log-modified: add only if in data-before
+;; tx-log-removed: add only if in data-before
+;; this is not enough!
+;; example: remove :foo then add it again
+;; - would be added to keys-removed
+;; - won't be added to keys-new
+;; result: will be marked as keys-removed even though it hasn't been
+
 (deftype Transaction
   [data-before
    keys-new
@@ -142,37 +175,41 @@
       (throw (ex-info "tx already commited!" {}))))
 
   (tx-log-new [this key]
+    ;; FIXME: this is just dev-time safety, can be removed in prod
+    (when (keys-updated key) (throw (ex-info "tx-log-new an updated key" {:key key})))
     (Transaction.
-      data-before
-      (conj keys-new key)
-      keys-updated
-      keys-removed
-      completed-ref))
+     data-before
+     (conj keys-new key)
+     keys-updated
+     (if (keys-removed key) (disj keys-removed key) keys-removed)
+     completed-ref))
 
   (tx-log-modified [this key]
+    ;; FIXME: this is just dev-time safety, can be removed in prod
+    (when (keys-removed key) (throw (ex-info "tx-log-modified a removed key" {:key key})))
     (Transaction.
-      data-before
-      keys-new
-      (conj keys-updated key)
-      keys-removed
-      completed-ref))
+     data-before
+     keys-new
+     (if (keys-new key) keys-updated (conj keys-updated key))
+     keys-removed
+     completed-ref))
 
   (tx-log-removed [this key]
     (Transaction.
-      data-before
-      keys-new
-      keys-updated
-      (conj keys-removed key)
-      completed-ref))
+     data-before
+     (if (keys-new key) (disj keys-new key) keys-new)
+     (if (keys-updated key) (disj keys-updated key) keys-updated)
+     (conj keys-removed key)
+     completed-ref))
 
   ITransactableCommit
   (tx-commit! [this]
     (vreset! completed-ref true)
     {:data-before data-before
-     ;; not using persistent for simpler insertion of "tx rules"
-     :keys-new keys-new #_(persistent! keys-new)
-     :keys-updated keys-updated #_(persistent! keys-updated)
-     :keys-removed keys-removed #_(persistent! keys-removed)}))
+     ;; not using transient to be able to read this data simply in tx rules
+     :keys-new keys-new
+     :keys-updated keys-updated
+     :keys-removed keys-removed}))
 
 (deftype GroveDB
   #?@(:clj
@@ -404,9 +441,9 @@
       data
       (Transaction.
         data
-        #{} #_(transient #{})
-        #{} #_(transient #{})
-        #{} #_(transient #{})
+        #{}
+        #{}
+        #{}
         (volatile! false))))
 
   ITransactableCommit
@@ -429,44 +466,15 @@
     (if (instance? GroveDB db) @db db)))
 
 
-;; doesn't work with transient keys
-(defn recorded-tx-keys [^GroveDB db]
+(defn read-tx [^GroveDB db]
+  (when-some [^Transaction tx (.-tx db)]
+    tx))
+
+(defn read-tx-keys [^GroveDB db]
   (when-some [tx (.-tx db)]
     {:keys-new     (.-keys-new tx)
      :keys-removed (.-keys-removed tx)
      :keys-updated (.-keys-updated tx)}))
-
-
-(defn key-removed? [db-before db-after k]
-  (and (contains? db-before k) (not (contains? db-after k))))
-
-(defn key-added? [db-before db-after k]
-  (and (not (contains? db-before k)) (contains? db-after k)))
-
-(defn key-updated? [db-before db-after k]
-  (and (contains? db-before k) (contains? db-after k)))
-
-(defn filters [pred set]
-  (reduce (fn [acc itm] (if (pred itm) acc (disj acc itm)))
-          set set))
-
-(comment
-  (filters pos? #{-1 0 1 2}))
-
-;; TODO: could be a protocol implemented by GDB?
-(defn normalise-tx-keys
-  "- key is truly removed if it was present in db-before but is absent in db-after
-   - key is truly new if absent in db-before but present in db-after
-   - keys is updated if present in both places"
-  ([db-before db]
-   (let [{:keys [keys-new keys-updated keys-removed]} (recorded-tx-keys db)]
-     (normalise-tx-keys db-before db keys-new keys-updated keys-removed)))
-  ([db-before db-after keys-new keys-updated keys-removed]
-   (let [filters* (fn [f ks] (filters #(f db-before db-after %) ks))]
-     {:keys-new     (filters* key-added? keys-new)
-      :keys-updated (filters* key-updated? keys-updated)
-      :keys-removed (filters* key-removed? keys-removed)})))
-
 
 ;; TODO: perhaps use a key like ::invalid-type, instead of nil
 (defn default-type-fn [_]
