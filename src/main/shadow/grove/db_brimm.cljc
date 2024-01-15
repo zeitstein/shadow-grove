@@ -467,11 +467,11 @@
 
 
 (defn read-tx [^GroveDB db]
-  (when-some [^Transaction tx (.-tx db)]
-    tx))
+  {:pre [(instance? GroveDB db)]}
+  ^Transaction (.-tx db))
 
 (defn read-tx-keys [^GroveDB db]
-  (when-some [tx (.-tx db)]
+  (let [tx (read-tx db)]
     {:keys-new     (.-keys-new tx)
      :keys-removed (.-keys-removed tx)
      :keys-updated (.-keys-updated tx)}))
