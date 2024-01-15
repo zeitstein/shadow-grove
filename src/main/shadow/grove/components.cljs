@@ -325,7 +325,7 @@
   (handle-event! [this {ev-id :e :as ev-map} e origin]
     (let [handler
           (cond
-            (qualified-keyword? ev-id)
+            (keyword? ev-id)
             (or (get (.-events config) ev-id)
                 (get (.-opts config) ev-id))
 
