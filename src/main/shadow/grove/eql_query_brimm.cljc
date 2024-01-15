@@ -346,7 +346,8 @@
    {:pre [(some? env)
           (map? db)
           (map? current)
-          (vector? query-data)]}
+          (or (nil? query-data) (vector? query-data))]}
+   #?(:cljs (when (nil? query-data) (js/console.warn ::nil-query-data)))
    (let [len (count query-data)]
      (loop [current current
             result (transient {})
