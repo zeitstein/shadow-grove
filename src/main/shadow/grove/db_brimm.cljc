@@ -37,6 +37,11 @@
 (defn coll-key [entity-type]
   [::all entity-type])
 
+(defn coll-key? [thing]
+  (and (vector? thing)
+       (= 2 (count thing))
+       (keyword-identical? ::all (first thing))))
+
 ;; legacy
 
 (defn make-ident [type id]
