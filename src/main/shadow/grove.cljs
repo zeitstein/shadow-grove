@@ -189,7 +189,10 @@
         (RootEventTarget. rt-ref)
 
         env-init
-        (::rt/env-init @rt-ref)]
+        (::rt/env-init @rt-ref)
+
+        error-handler
+        (or (::rt/error-handler @rt-ref) default-error-handler)]
 
     (reduce
       (fn [env init-fn]
@@ -202,7 +205,7 @@
        ::rt/root-el root-el
        ::rt/runtime-ref rt-ref
        ;; FIXME: get this from rt-ref?
-       ::comp/error-handler default-error-handler}
+       ::comp/error-handler error-handler}
 
       env-init)))
 
