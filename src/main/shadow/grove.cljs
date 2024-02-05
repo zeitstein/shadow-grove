@@ -34,15 +34,15 @@
 (defn query-ident
   ;; shortcut for ident lookups that can skip EQL queries
   ([ident]
-   {:pre [(db/ident? ident)]}
+   #_{:pre [(db/ident? ident)]}
    (impl/slot-query ident nil {}))
   ;; EQL queries
   ([ident query]
-   {:pre [(db/ident? ident)
+   {:pre [#_(db/ident? ident)
           (vector? query)]}
    (impl/slot-query ident query {}))
   ([ident query config]
-   {:pre [(db/ident? ident)
+   {:pre [#_(db/ident? ident)
           (vector? query)
           (map? config)]}
    (impl/slot-query ident query config)))

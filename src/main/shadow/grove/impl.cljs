@@ -4,8 +4,8 @@
     [shadow.grove :as-alias sg]
     [shadow.grove.protocols :as gp]
     [shadow.grove.runtime :as rt]
-    [shadow.grove.db :as db]
-    [shadow.grove.eql-query :as eql]
+    [shadow.grove.db-brimm :as db]
+    [shadow.grove.eql-query-brimm :as eql]
     [shadow.grove.components :as comp]
     ))
 
@@ -260,6 +260,14 @@
             tx-done-ref
             (atom false)
 
+            timestamp
+            (js/Date.now)
+
+            ev
+            (if (map? ev)
+              (assoc ev :tx-timestamp timestamp)
+              {:e ev-id :tx-timestamp timestamp}) ;; for created/modified-at
+
             tx-env
             (assoc env
               ::tx-guard tx-guard
@@ -272,8 +280,16 @@
               (fn [next-tx]
                 (throw (ex-info "transact! only allowed from fx env" {:tx next-tx}))))
 
+            result-before-tx-rules
+            (merge-result tx-env ev (handler tx-env ev))
+
             result
-            (merge-result tx-env ev (handler tx-env ev))]
+            (if-some [inter-tx-fn (::rt/inter-tx-fn env)]
+              (let [inter-db  (:db result-before-tx-rules)
+                    inter-env {:event ev :db-before @before :db inter-db}]
+                (merge result-before-tx-rules (inter-tx-fn inter-env)))
+
+              result-before-tx-rules)]
 
         (let [{:keys [db data keys-new keys-removed keys-updated] :as tx-result}
               (db/tx-commit! (:db result))]
