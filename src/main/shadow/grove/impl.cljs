@@ -4,8 +4,8 @@
     [shadow.grove :as-alias sg]
     [shadow.grove.protocols :as gp]
     [shadow.grove.runtime :as rt]
-    [shadow.grove.db :as db]
-    [shadow.grove.eql-query :as eql]
+    [shadow.grove.db-brimm :as db]
+    [shadow.grove.eql-query-brimm :as eql]
     [shadow.grove.components :as comp]
     ))
 

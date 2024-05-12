@@ -339,7 +339,7 @@
 (defonce tx-ref (atom {}))
 
 (defn relevant-key? [x]
-  (or (db/ident? x) (keyword? x)))
+  true #_(or (db/ident? x) (keyword? x)))
 
 (defn as-stream-event [entry]
   (-> entry
