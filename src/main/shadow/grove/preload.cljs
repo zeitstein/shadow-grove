@@ -327,7 +327,7 @@
   (-> entry
       (select-keys
         ;; FIXME: event is possible very large, should maybe only send it in full when requested
-        [::m/ts ::m/tx-id ::sg/app-id ::sg/event ::sg/fx])
+        [::m/ts ::m/tx-id ::sg/app-id ::sg/event ::sg/parsed-event ::sg/fx])
       (assoc :count-new (count-tx-keys tx-info :keys-new))
       (assoc :count-updated (count-tx-keys tx-info :keys-updated))
       (assoc :count-removed (count-tx-keys tx-info :keys-removed))

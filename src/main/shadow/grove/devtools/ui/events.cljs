@@ -73,12 +73,12 @@
     (:diff (sg/kv-lookup ::m/event event-id)))
 
   (render
-    (let [{::m/keys [ts] ::sg/keys [event fx] :keys [count-new count-updated count-removed]} entry
+    (let [{::m/keys [ts] ::sg/keys [parsed-event fx] :keys [count-new count-updated count-removed]} entry
           $label (css :px-4 :py-2 :border-l :text-center :cursor-pointer
                    ["&.active" :font-bold])]
       (<< [:div {:class (css :flex)
                  :on-click ::close!}
-           [:div {:class (css :flex-1 :px-4 :py-2 :text-lg :font-bold)} (str (:e event))]
+           [:div {:class (css :flex-1 :px-4 :py-2 :text-lg :font-bold)} (str (:ev-id parsed-event))]
            [:div {:class (css :cursor-pointer :py-2 :pr-2)} ui-common/icon-close]]
           [:div {:class (css :flex :border-y-2 :overflow-hidden)}
            [:div {:class (str $label (when (= tab :event) " active")) :on-click #(reset! tab-ref :event)} "Event"]
@@ -97,7 +97,7 @@
              :updated (sg/simple-seq (:updated diff) #(ui-diff-entry %1 :update))
              :removed (sg/simple-seq (:removed diff) #(ui-diff-entry %1 :remove))
              :fx (sg/simple-seq fx ui-fx-entry)
-             (edn/render-edn event))]
+             (edn/render-edn parsed-event))]
           ))))
 
 (defc ui-dev-log [event-id entry]
@@ -177,11 +177,11 @@
              [:div {:class (css :flex-1 :truncate)} (:header entry)]])
 
         :tx-report
-        (let [{::sg/keys [event fx] :keys [count-new count-updated count-removed]} entry]
+        (let [{::sg/keys [parsed-event fx] :keys [count-new count-updated count-removed]} entry]
           (<< [:div {:class (css :flex :border-b :cursor-pointer [:hover :bg-gray-100])
                      :on-click select-ev}
                [:div {:class (css :px-2 {:width "95px"})} (time-ts ts)]
-               [:div {:class (css :flex-1 :truncate {:color "#660e7a"})} (str (:e event))]
+               [:div {:class (css :flex-1 :truncate {:color "#660e7a"})} (str (:ev-id parsed-event))]
                [:div {:class $numeric} count-new]
                [:div "/"]
                [:div {:class $numeric} count-updated]

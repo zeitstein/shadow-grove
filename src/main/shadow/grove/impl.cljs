@@ -231,7 +231,7 @@
 
   js/undefined)
 
-(defn merge-result [tx-env ev result]
+(defn merge-result [tx-env ev-id ev result]
   (cond
     (nil? result)
     tx-env
@@ -239,7 +239,7 @@
     (not (map? result))
     (throw
       (ex-info
-        (str "tx handler returned invalid result for event " (:e ev))
+        (str "tx handler returned invalid result for event " ev-id)
         {:event ev
          :env tx-env
          :result result}))
@@ -250,7 +250,7 @@
     :else
     (throw
       (ex-info
-        (str "tx handler returned invalid result for event" (:e ev) ", expected a modified env")
+        (str "tx handler returned invalid result for event" ev-id ", expected a modified env")
         {:event ev
          :env tx-env
          :result result}))))
@@ -356,25 +356,51 @@
             (-assoc tx-env ::sg/tx-info tx-info)
             ))))))
 
+(defn ev-fn-id [f]
+  (.-shadow_grove_ev_id f))
+
+(defn parse-ev [event-config ev]
+  (cond
+    (fn? ev)
+    {:ev-id ::fn
+     :handler ev
+     :args []}
+
+    (map? ev)
+    (let [{:keys [e f]} ev
+          ev-id (or e (ev-fn-id f))]
+      {:ev-id ev-id
+       :handler (or f (get event-config ev-id))
+       :args [(dissoc ev :f)]})
+
+    (and (vector? ev) (fn? (first ev)))
+    (let [[f & args] ev]
+      {:ev-id (ev-fn-id f)
+       :handler f
+       :args args})
+
+    (and (vector? ev) (vector? (first ev)))
+    ;; TODO:
+    #_(mapv parse-ev ev)
+    (parse-ev event-config (first ev))
+
+    :else
+    (throw (ex-info "couldn't parse ev" {:ev ev}))))
+
 (defn process-event
   [rt-ref
    ev
    dom-ev
    origin]
-  {:pre [(or (fn? ev) (map? ev))]}
+  {:pre [(or (fn? ev) (map? ev) (vector? ev))]}
 
   ;; (js/console.log ev-id ev origin @rt-ref)
 
   (let [{::sg/keys [event-config event-interceptors fx-config] :as env}
         @rt-ref
 
-        ev-id
-        (if (fn? ev) ::fn (:e ev))
-
-        handler
-        (if (fn? ev)
-          ev
-          (get event-config ev-id))]
+        {:keys [ev-id handler args] :as parsed-ev}
+        (parse-ev event-config ev)]
 
     (if-not handler
       (unhandled-event-ex! ev-id ev origin)
@@ -393,7 +419,9 @@
                    ::sg/runtime-ref rt-ref
                    ::sg/tx-after (list) ;; FILO
                    ::sg/fx []
-                   ::sg/origin origin}
+                   ::sg/origin origin
+                   ::sg/parsed-event (dissoc parsed-ev :handler)}
+                  ;; legacy
                   (cond->
                     (map? ev)
                     (assoc ::sg/event ev)))
@@ -402,10 +430,11 @@
               (call-interceptors event-interceptors tx-env)
 
               handler-result
-              (handler tx-env ev dom-ev)
+              ;; ! lost the dom-ev here! not neccessary, though
+              (apply handler tx-env args)
 
               result
-              (merge-result tx-env ev handler-result)
+              (merge-result tx-env ev-id ev handler-result)
 
               result
               (call-interceptors (::sg/tx-after result) result)]
@@ -416,6 +445,7 @@
 
           ;; dispatching async so render can get to it sooner
           ;; dispatching these async since they can never do anything that affects the current render right?
+          ;; TODO: support var fx
           (rt/next-tick
             (fn []
               (doseq [[fx-key value] (::sg/fx result)]
@@ -449,7 +479,7 @@
 
         (catch :default e
           (let [event-error-handler (::sg/event-error-handler env)]
-            (event-error-handler env ev origin e))
+            (event-error-handler env (assoc parsed-ev :ev ev) origin e))
           )))))
 
 (defn lazy-seq? [thing]

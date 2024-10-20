@@ -283,9 +283,9 @@
   ;; FIXME: figure out default event handler
   ;; don't want to declare all events all the time
   gp/IHandleEvents
-  (handle-event! [this {ev-id :e :as ev-map} e origin]
+  (handle-event! [this {ev-id :e ev-fn :f :as ev-map} e origin]
     (let [handler
-          (if (keyword? ev-id)
+          (if (or (keyword? ev-id) (fn? ev-fn) (vector? ev-map))
             (or (get (.-events config) ev-id)
                 (get (.-opts config) ev-id))
 
@@ -550,16 +550,16 @@
 (extend-type ManagedComponent
   ap/IHandleDOMEvents
   (validate-dom-event-value! [this env event ev-value]
-    (when-not (or (keyword? ev-value) (map? ev-value))
+    (when-not (or (keyword? ev-value) (map? ev-value) (vector? ev-value))
       (throw
         (ex-info
-          (str "event: " event " expects a map or keyword value")
+          (str "event: " event " expects a map or keyword or vector value")
           {:event event :value ev-value}))))
 
   ;; event is "click" for :on-click etc which we just drop
   (handle-dom-event! [this event-env event ev-value dom-event]
     (let [ev-map
-          (if (map? ev-value)
+          (if (or (map? ev-value) (vector? ev-value))
             ev-value
             {:e ev-value})]
 

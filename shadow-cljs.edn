@@ -30,7 +30,8 @@
   3013 "examples/ui"
   3014 "examples/dummy"
   3015 "examples/flex"
-  3016 "examples/replicant"}
+  3016 "examples/replicant"
+  3017 "examples/var-events"}
 
  :build-defaults
  {:compiler-options
@@ -64,6 +65,12 @@
    :output-dir "examples/flex/js"
    :asset-path "/js"
    :modules {:main {:init-fn dummy.flex/init}}}
+
+  :var-events
+  {:target :browser
+   :output-dir "examples/var-events/js"
+   :asset-path "/js"
+   :modules {:main {:init-fn dummy.var-events/init}}}
 
   :examples-bootstrap
   {:target :bootstrap
